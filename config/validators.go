@@ -14,6 +14,13 @@ type ValidatorsConfig struct {
 	ValidatorListSites     []string `toml:"validator_list_sites" mapstructure:"validator_list_sites"`
 	ValidatorListKeys      []string `toml:"validator_list_keys" mapstructure:"validator_list_keys"`
 	ValidatorListThreshold int      `toml:"validator_list_threshold" mapstructure:"validator_list_threshold"`
+
+	// declaresTrust records that the file declares a validators,
+	// validator_keys or validator_list_keys section, even with no entries; a
+	// validators file is valid as long as one of them is present. The TOML
+	// schema has no validator_keys key, so that section is only honoured in
+	// the classic validators.txt form.
+	declaresTrust bool
 }
 
 // Validate performs validation on the validators configuration
@@ -196,6 +203,10 @@ func ParseValidatorsTxt(content string) (*ValidatorsConfig, error) {
 
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			currentSection = line[1 : len(line)-1]
+			switch currentSection {
+			case "validators", "validator_keys", "validator_list_keys":
+				config.declaresTrust = true
+			}
 			continue
 		}
 

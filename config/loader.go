@@ -290,6 +290,7 @@ func loadValidatorsTomlFile(filePath string) (*ValidatorsConfig, error) {
 	if err := v.Unmarshal(&validators); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal validators config: %w", err)
 	}
+	validators.declaresTrust = v.IsSet("validators") || v.IsSet("validator_list_keys")
 	if err := validateValidatorsFile(&validators); err != nil {
 		return nil, err
 	}
@@ -319,8 +320,8 @@ func validateValidatorsFile(validators *ValidatorsConfig) error {
 	if len(validators.ValidatorListSites) > 0 && len(validators.ValidatorListKeys) == 0 {
 		return fmt.Errorf("validator_list_sites requires at least one validator_list_keys entry")
 	}
-	if len(validators.Validators) == 0 && len(validators.ValidatorListKeys) == 0 {
-		return fmt.Errorf("validators file must configure validators or validator_list_keys")
+	if !validators.declaresTrust {
+		return fmt.Errorf("validators file must declare a [validators], [validator_keys] or [validator_list_keys] section")
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -1174,4 +1175,54 @@ func TestParseValidatorsTxt_LineEndings(t *testing.T) {
 func TestExampleConfigLoads(t *testing.T) {
 	_, err := LoadConfig(Paths{Main: filepath.Join("examples", "goxrpl.toml")})
 	require.NoError(t, err)
+}
+
+func TestLoadConfig_EmptyValidatorSections(t *testing.T) {
+	configContent := `
+validators_file = "%s"
+database_path = "/tmp/test/db"
+network_id = "main"
+debug_logfile = "/tmp/test/debug.log"
+
+[server]
+ports = ["port_test"]
+
+[port_test]
+port = 8080
+ip = "127.0.0.1"
+protocol = "http"
+
+[node_db]
+type = "pebble"
+path = "/tmp/test/db"
+`
+	for _, tc := range []struct {
+		name, file, content string
+		errSub              string
+	}{
+		{name: "toml empty validators", file: "validators.toml", content: "validators = []\n"},
+		{name: "toml empty list keys", file: "validators.toml", content: "validator_list_keys = []\n"},
+		{name: "toml without trust keys", file: "validators.toml", content: "validator_list_sites = []\n", errSub: "must declare a [validators]"},
+		{name: "toml sites without keys", file: "validators.toml", content: "validator_list_sites = [\"https://vl.example\"]\n", errSub: "validator_list_sites requires at least one validator_list_keys entry"},
+		{name: "txt empty validators section", file: "validators.txt", content: "[validators]\n"},
+		{name: "txt empty validator_keys section", file: "validators.txt", content: "[validator_keys]\n"},
+		{name: "txt empty validator_list_keys section", file: "validators.txt", content: "[validator_list_keys]\n"},
+		{name: "txt without trust sections", file: "validators.txt", content: "[validator_list_threshold]\n1\n", errSub: "must declare a [validators]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			mainConfigPath := writeConfig(t, tempDir, "goxrpl.toml", fmt.Sprintf(configContent, tc.file))
+			writeConfig(t, tempDir, tc.file, tc.content)
+
+			config, err := LoadConfig(Paths{Main: mainConfigPath})
+			if tc.errSub != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errSub)
+				return
+			}
+			require.NoError(t, err)
+			assert.Empty(t, config.Validators.Validators)
+			assert.Empty(t, config.Validators.ValidatorListKeys)
+		})
+	}
 }
